@@ -20,14 +20,20 @@ from typing import Any, Callable, Dict, Hashable, List, Optional, Union
 
 import numpy as np
 from mlxtend.evaluate import permutation_test
-from sklearn.metrics import (cohen_kappa_score, confusion_matrix,
-                             roc_auc_score, roc_curve)
+from sklearn.metrics import (
+    cohen_kappa_score,
+    confusion_matrix,
+    roc_auc_score,
+    roc_curve,
+)
 from tqdm import tqdm
 
 try:
-    from picai_eval.stat_util.stat_util import pvalue_stat
+    from picai_eval_p4.stat_util.stat_util import pvalue_stat
 except ImportError:  # pragma: no cover
-    print("Could not find picai_eval.stat_util. Please install picai_eval including submodules (use pip >= 21.0)")
+    print(
+        "Could not find picai_eval_p4.stat_util. Please install picai_eval_p4 including submodules (use pip >= 21.0)"
+    )
 
 try:
     import numpy.typing as npt
@@ -43,29 +49,31 @@ Target Classes: Benign(0), Malignant(1)
 """
 
 IntDictOrArraylike = "Union[Dict[Hashable, int], Sequence[int], npt.NDArray[np.int_]]"
-FloatDictOrArraylike = "Union[Dict[Hashable, float], Sequence[float], npt.NDArray[np.float_]]"
+FloatDictOrArraylike = (
+    "Union[Dict[Hashable, float], Sequence[float], npt.NDArray[np.float_]]"
+)
 
 
 def calc_sensitivity(y_true, y_pred, sample_weight=None):
     """Calculate sensitivity"""
     _, _, fn, tp = confusion_matrix(y_true, y_pred, sample_weight=sample_weight).ravel()
-    return tp / (tp+fn)
+    return tp / (tp + fn)
 
 
 def calc_specificity(y_true, y_pred, sample_weight=None):
     """Calculate specificity"""
     tn, fp, _, _ = confusion_matrix(y_true, y_pred, sample_weight=sample_weight).ravel()
-    return tn / (tn+fp)
+    return tn / (tn + fp)
 
 
 def calc_order_auc_score(
     scores_baseline: "Union[Sequence[float], npt.NDArray[np.float_]]",
-    scores_alternative: "Union[Sequence[float], npt.NDArray[np.float_]]"
+    scores_alternative: "Union[Sequence[float], npt.NDArray[np.float_]]",
 ) -> float:
     """Calculate the order AUC for performance(alternative) > performance(baseline)"""
     # pose order AUC as classification AUC to use roc_auc_score
     scores_all = list(scores_baseline) + list(scores_alternative)
-    labels_all = [0]*len(list(scores_baseline)) + [1]*len(list(scores_alternative))
+    labels_all = [0] * len(list(scores_baseline)) + [1] * len(list(scores_alternative))
     auc_score = roc_auc_score(y_true=labels_all, y_score=scores_all)
 
     return float(auc_score)
@@ -75,7 +83,7 @@ def perform_permutation_test(
     scores_baseline: "Union[Sequence[float], npt.NDArray[np.float_]]",
     scores_alternative: "Union[Sequence[float], npt.NDArray[np.float_]]",
     method: Optional[str] = None,
-    iterations: int = 1_000_000
+    iterations: int = 1_000_000,
 ) -> float:
     """
     Calculate p-value for comparison of baseline with alternative configuration.
@@ -99,12 +107,19 @@ def perform_permutation_test(
     """
     if method is None:
         # use exact permutation test if feasible, or approximate permutation test otherwise
-        method = 'exact' if len(scores_baseline)+len(scores_alternative) <= 20 else 'approximate'
+        method = (
+            "exact"
+            if len(scores_baseline) + len(scores_alternative) <= 20
+            else "approximate"
+        )
 
     # perform permutation test
     p = permutation_test(
-        x=scores_baseline, y=scores_alternative, func=calc_order_auc_score,
-        method=method, num_rounds=iterations
+        x=scores_baseline,
+        y=scores_alternative,
+        func=calc_order_auc_score,
+        method=method,
+        num_rounds=iterations,
     )
 
     return float(p)
@@ -116,7 +131,7 @@ def permutation_test_wrapper(args) -> float:
 
 def multiple_permutation_tests(
     all_scores: "Dict[str, Dict[str, Union[Sequence[float], npt.NDArray[np.float_]]]]",
-    iterations: int = 1_000_000
+    iterations: int = 1_000_000,
 ) -> Dict[str, float]:
     """
     Perform multiple permutation tests using multiprocessing.
@@ -156,13 +171,17 @@ def multiple_permutation_tests(
         for name, scores in all_scores.items():
             # prepare input arguments of permutation test
             args: Dict[str, Any] = dict(scores)
-            args['iterations'] = iterations
+            args["iterations"] = iterations
 
             # add permutation test to the queue
             future = pool.submit(permutation_test_wrapper, args)
             jobs[future] = name
 
-        for future in tqdm(concurrent.futures.as_completed(jobs), total=len(scores), desc="Performing permutation tests"):
+        for future in tqdm(
+            concurrent.futures.as_completed(jobs),
+            total=len(scores),
+            desc="Performing permutation tests",
+        ):
             # store result of permutation test
             name = jobs[future]
             p_values[name] = future.result()
@@ -170,7 +189,9 @@ def multiple_permutation_tests(
     return p_values
 
 
-def match_reader(y_true, y_pred_ai, y_pred_reader, sample_weight=None, match='sensitivity'):
+def match_reader(
+    y_true, y_pred_ai, y_pred_reader, sample_weight=None, match="sensitivity"
+):
     # input conversion and validation
     y_true = np.array(y_true)
     y_pred_ai = np.array(y_pred_ai)
@@ -178,32 +199,40 @@ def match_reader(y_true, y_pred_ai, y_pred_reader, sample_weight=None, match='se
     assert len(y_true) == len(y_pred_reader)
 
     if y_true.shape != y_pred_ai.shape:
-        return np.array([
-            match_reader(
-                y_true=y_true,
-                y_pred_ai=y_pred_ai_restart,
-                y_pred_reader=y_pred_reader,
-                sample_weight=sample_weight,
-                match=match
-            )
-            for y_pred_ai_restart in y_pred_ai
-        ])
+        return np.array(
+            [
+                match_reader(
+                    y_true=y_true,
+                    y_pred_ai=y_pred_ai_restart,
+                    y_pred_reader=y_pred_reader,
+                    sample_weight=sample_weight,
+                    match=match,
+                )
+                for y_pred_ai_restart in y_pred_ai
+            ]
+        )
 
     assert len(y_true) == len(y_pred_ai)
 
     # calculate metric (sensitivity/specificity/recall/precision) for reader
-    if match == 'sensitivity':
-        performance_reader = calc_sensitivity(y_true=y_true, y_pred=y_pred_reader, sample_weight=sample_weight)
-    elif match == 'specificity':
-        performance_reader = calc_specificity(y_true=y_true, y_pred=y_pred_reader, sample_weight=sample_weight)
+    if match == "sensitivity":
+        performance_reader = calc_sensitivity(
+            y_true=y_true, y_pred=y_pred_reader, sample_weight=sample_weight
+        )
+    elif match == "specificity":
+        performance_reader = calc_specificity(
+            y_true=y_true, y_pred=y_pred_reader, sample_weight=sample_weight
+        )
     else:
         raise ValueError
 
     # match AI operating point to reader
-    fpr, tpr, thresholds = roc_curve(y_true=y_true, y_score=y_pred_ai, sample_weight=sample_weight)
-    if match == 'sensitivity':
+    fpr, tpr, thresholds = roc_curve(
+        y_true=y_true, y_score=y_pred_ai, sample_weight=sample_weight
+    )
+    if match == "sensitivity":
         performance_ai = tpr
-    elif match == 'specificity':
+    elif match == "specificity":
         performance_ai = 1 - fpr
 
     diff = np.abs(performance_ai - performance_reader)
@@ -217,19 +246,30 @@ def match_reader(y_true, y_pred_ai, y_pred_reader, sample_weight=None, match='se
     return (y_pred_ai >= threshold).astype(int)
 
 
-def match_then_compare(y_true, y_pred_ai, y_pred_reader, sample_weight=None, match='sensitivity', verbose=False):
+def match_then_compare(
+    y_true,
+    y_pred_ai,
+    y_pred_reader,
+    sample_weight=None,
+    match="sensitivity",
+    verbose=False,
+):
     # match AI operating point to the reader
     y_pred_ai_matched = match_reader(
         y_true=y_true,
         y_pred_ai=y_pred_ai,
         y_pred_reader=y_pred_reader,
         sample_weight=sample_weight,
-        match=match
+        match=match,
     )
 
     # evaluate AI and reader at matched operating point
-    kappa_ai = cohen_kappa_score(y1=y_true, y2=y_pred_ai_matched, sample_weight=sample_weight)
-    kappa_reader = cohen_kappa_score(y1=y_true, y2=y_pred_reader, sample_weight=sample_weight)
+    kappa_ai = cohen_kappa_score(
+        y1=y_true, y2=y_pred_ai_matched, sample_weight=sample_weight
+    )
+    kappa_reader = cohen_kappa_score(
+        y1=y_true, y2=y_pred_reader, sample_weight=sample_weight
+    )
 
     print(f"κR = {kappa_reader:.4f}, κAI = {kappa_ai:.4f}") if verbose else None
 
@@ -237,7 +277,9 @@ def match_then_compare(y_true, y_pred_ai, y_pred_reader, sample_weight=None, mat
     return kappa_reader - kappa_ai
 
 
-def sample_then_match_then_compare(y_true, y_pred_ai, y_pred_reader, sample_weight, match='sensitivity'):
+def sample_then_match_then_compare(
+    y_true, y_pred_ai, y_pred_reader, sample_weight, match="sensitivity"
+):
     indices = np.random.randint(0, len(y_true), len(y_true))
     while len(np.unique(y_true[indices])) < 2:
         # Reject one class samples
@@ -248,7 +290,7 @@ def sample_then_match_then_compare(y_true, y_pred_ai, y_pred_reader, sample_weig
         y_pred_ai=y_pred_ai[indices],
         y_pred_reader=y_pred_reader[indices],
         sample_weight=sample_weight[indices],
-        match=match
+        match=match,
     )
 
     return z
@@ -283,8 +325,9 @@ def validate_and_convert(*inputs) -> "List[npt.NDArray[Any]]":
 
         # check if all cases are present in each dictionary
         cases = set(list(inputs[0]))
-        assert all(cases == set(list(inp)) for inp in inputs), \
-            "Inputs must all contain the same cases!"
+        assert all(
+            cases == set(list(inp)) for inp in inputs
+        ), "Inputs must all contain the same cases!"
 
         # collect flat lists with cases in the same order
         cases = sorted(list(cases))
@@ -299,12 +342,14 @@ def perform_matched_boostrapping(
     y_pred_ai: "Union[Dict[Hashable, float], Sequence[float], npt.NDArray[np.float_]]",
     y_pred_reader: "Union[Dict[Hashable, int], Sequence[int], npt.NDArray[np.int_]]",
     match: str = "sensitivity",
-    conjugate_performance_metric: Optional[Union[str, Callable[[Any, Any, Optional[Any]], float]]] = None,
+    conjugate_performance_metric: Optional[
+        Union[str, Callable[[Any, Any, Optional[Any]], float]]
+    ] = None,
     flavour: str = "match>sample>compare",
     sample_weight: "Optional[Union[Dict[Hashable, float], Sequence[float], npt.NDArray[np.float_]]]" = None,
     iterations: int = 1_000_000,
     seed: Optional[int] = None,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> float:
     """
     Perform bootstrapping to estimate the probability that AI outperforms the reader.
@@ -347,17 +392,21 @@ def perform_matched_boostrapping(
     y_true = y_true.astype(int)
     y_pred_ai = y_pred_ai.astype(float)
     y_pred_reader = y_pred_reader.astype(int)
-    assert np.min(y_pred_reader) >= 0 and np.max(y_pred_reader) <= 1, \
-        "Reader predictions should be thresholded (e.g., PI-RADS ≥ 4)."
+    assert (
+        np.min(y_pred_reader) >= 0 and np.max(y_pred_reader) <= 1
+    ), "Reader predictions should be thresholded (e.g., PI-RADS ≥ 4)."
     if sample_weight is not None:
         sample_weight = sample_weight.astype(float)
     else:
         sample_weight = np.ones_like(y_true, dtype=float)
 
-    assert y_true.shape == y_pred_reader.shape and len(y_true.shape) == 1, \
-        f"Recieved unexpected shape for y_true (after conversion): {y_true.shape}"
+    assert (
+        y_true.shape == y_pred_reader.shape and len(y_true.shape) == 1
+    ), f"Recieved unexpected shape for y_true (after conversion): {y_true.shape}"
 
-    assert len(y_pred_ai.shape) <= 2, f"Unexpected shape for y_pred_ai (after conversion): {y_pred_ai.shape}"
+    assert (
+        len(y_pred_ai.shape) <= 2
+    ), f"Unexpected shape for y_pred_ai (after conversion): {y_pred_ai.shape}"
     if y_pred_ai.shape[-1] != y_true.shape[-1]:
         y_pred_ai = y_pred_ai.transpose()
 
@@ -367,7 +416,9 @@ def perform_matched_boostrapping(
 
     if isinstance(conjugate_performance_metric, str):
         # determine conjugate performance metric function
-        conjugate_performance_metric = get_performance_metric_func(conjugate_performance_metric)
+        conjugate_performance_metric = get_performance_metric_func(
+            conjugate_performance_metric
+        )
 
     if flavour == "match>sample>compare":
         # match AI operating point to the reader
@@ -376,7 +427,7 @@ def perform_matched_boostrapping(
             y_pred_ai=y_pred_ai,
             y_pred_reader=y_pred_reader,
             sample_weight=sample_weight,
-            match=match
+            match=match,
         )
 
         # perform bootstrapping, see https://github.com/mateuszbuda/ml-stat-util
@@ -386,7 +437,8 @@ def perform_matched_boostrapping(
             y_preds2=y_pred_ai_matched,
             score_fun=conjugate_performance_metric,
             stat_fun=lambda x: x,
-            compare_fun=lambda reader1_scores, reader2_scores: 0.5 - calc_order_auc_score(reader1_scores, reader2_scores),
+            compare_fun=lambda reader1_scores, reader2_scores: 0.5
+            - calc_order_auc_score(reader1_scores, reader2_scores),
             sample_weight=sample_weight,
             two_tailed=False,
             n_bootstraps=iterations,
@@ -396,8 +448,16 @@ def perform_matched_boostrapping(
         with Pool(8) as pool:
             # perform bootstrapping
             # with itertool's repeat the input parameters do not have to be initialized thousands of times
-            args = dict(y_true=y_true, y_pred_ai=y_pred_ai, y_pred_reader=y_pred_reader, match=match, sample_weight=sample_weight)
-            z_subsets = pool.map(sample_then_match_then_compare_wrapper, repeat(args, iterations))
+            args = dict(
+                y_true=y_true,
+                y_pred_ai=y_pred_ai,
+                y_pred_reader=y_pred_reader,
+                match=match,
+                sample_weight=sample_weight,
+            )
+            z_subsets = pool.map(
+                sample_then_match_then_compare_wrapper, repeat(args, iterations)
+            )
 
         # compute probability estimate
         p = np.mean([z < 0 for z in z_subsets])
@@ -414,26 +474,28 @@ def perform_matched_boostrapping(
 def get_conjugate_performance_metric(performance_metric: str):
     # determine conjugate performance metric
     conjugate_performance_metrics = {
-        'sensitivity': 'specificity',
-        'specificity': 'sensitivity',
-        'recall': 'precision',
-        'precision': 'recall',
+        "sensitivity": "specificity",
+        "specificity": "sensitivity",
+        "recall": "precision",
+        "precision": "recall",
     }
-    assert performance_metric in conjugate_performance_metrics, \
-        f"Conjugate performance metric for {performance_metric} not found!"
+    assert (
+        performance_metric in conjugate_performance_metrics
+    ), f"Conjugate performance metric for {performance_metric} not found!"
 
     return conjugate_performance_metrics[performance_metric]
 
 
 def get_performance_metric_func(performance_metric: str):
     performance_metrics = {
-        'sensitivity': calc_sensitivity,
-        'specificity': calc_specificity,
+        "sensitivity": calc_sensitivity,
+        "specificity": calc_specificity,
         # 'recall': calc_recall,  # TODO: add this
         # 'precision': calc_precision,  # TODO: add this
     }
-    assert performance_metric in performance_metrics, \
-        f"Implementation of {performance_metric} not found!"
+    assert (
+        performance_metric in performance_metrics
+    ), f"Implementation of {performance_metric} not found!"
 
     return performance_metrics[performance_metric]
 
@@ -443,10 +505,12 @@ def perform_matched_permutation_test(
     y_pred_ai: FloatDictOrArraylike,
     y_pred_readers: FloatDictOrArraylike,
     match: Union[str, Callable[[Any, Any, Optional[Any]], float]] = "sensitivity",
-    conjugate_performance_metric: Optional[Union[str, Callable[[Any, Any, Optional[Any]], float]]] = None,
+    conjugate_performance_metric: Optional[
+        Union[str, Callable[[Any, Any, Optional[Any]], float]]
+    ] = None,
     sample_weight: Optional[FloatDictOrArraylike] = None,
     iterations: int = 1_000_000,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> float:
     """
     Perform a permutation test to estimate the probability that AI outperforms the panel of readers.
@@ -490,11 +554,16 @@ def perform_matched_permutation_test(
             y_true, y_pred_ai, y_pred_readers
         )
 
-    assert len(y_true.shape) == 1, \
-        f"Recieved unexpected shape for y_true (after conversion): {y_true.shape}"
+    assert (
+        len(y_true.shape) == 1
+    ), f"Recieved unexpected shape for y_true (after conversion): {y_true.shape}"
 
-    assert len(y_pred_ai.shape) == 2, f"Unexpected shape for y_pred_ai (after conversion): {y_pred_ai.shape}"
-    assert len(y_pred_readers.shape) == 2, f"Unexpected shape for y_pred_readers (after conversion): {y_pred_readers.shape}"
+    assert (
+        len(y_pred_ai.shape) == 2
+    ), f"Unexpected shape for y_pred_ai (after conversion): {y_pred_ai.shape}"
+    assert (
+        len(y_pred_readers.shape) == 2
+    ), f"Unexpected shape for y_pred_readers (after conversion): {y_pred_readers.shape}"
     if y_pred_ai.shape[-1] != y_true.shape[-1]:
         y_pred_ai = y_pred_ai.transpose()
     if y_pred_readers.shape[-1] != y_true.shape[-1]:
@@ -506,7 +575,9 @@ def perform_matched_permutation_test(
 
     if isinstance(conjugate_performance_metric, str):
         # determine conjugate performance metric function
-        conjugate_performance_metric = get_performance_metric_func(conjugate_performance_metric)
+        conjugate_performance_metric = get_performance_metric_func(
+            conjugate_performance_metric
+        )
 
     # keep track of conjugate AI scores, after matching to a reader
     all_scores_ai = []
@@ -524,7 +595,7 @@ def perform_matched_permutation_test(
                 y_pred_ai=y_pred_ai_instance,
                 y_pred_reader=y_pred_reader,
                 sample_weight=sample_weight,
-                match=match
+                match=match,
             )
 
             score_ai = conjugate_performance_metric(y_true, y_pred_ai_matched)
@@ -532,12 +603,18 @@ def perform_matched_permutation_test(
 
         # calculate performance of reader w.r.t. AI and store results
         score_reader = conjugate_performance_metric(y_true, y_pred_reader)
-        scores_readers.append(calc_order_auc_score(matched_conjugate_scores_ai, [score_reader]))
+        scores_readers.append(
+            calc_order_auc_score(matched_conjugate_scores_ai, [score_reader])
+        )
 
         # calculate performance of AI instance w.r.t. AI and store results
         scores_ai = []
         for i, score_ai in enumerate(matched_conjugate_scores_ai):
-            other_scores = [score_reader]+matched_conjugate_scores_ai[:i] + matched_conjugate_scores_ai[i+1:]
+            other_scores = (
+                [score_reader]
+                + matched_conjugate_scores_ai[:i]
+                + matched_conjugate_scores_ai[i + 1 :]
+            )
             scores_ai.append(calc_order_auc_score(other_scores, [score_ai]))
         all_scores_ai.append(scores_ai)
 
@@ -545,11 +622,13 @@ def perform_matched_permutation_test(
     scores_ai = np.mean(all_scores_ai, axis=0)
 
     # perform bootstrapping, see https://github.com/mateuszbuda/ml-stat-util
-    print(f"""
+    print(
+        f"""
     Evaluating:
         {np.mean(scores_readers):.4f} ± {np.std(scores_readers):.4f} for panel of {len(scores_readers)} readers
         {np.mean(scores_ai):.4f} ± {np.std(scores_ai):.4f} for {len(scores_ai)} AI instances
-        (with {iterations} iterations)""") if verbose else None
+        (with {iterations} iterations)"""
+    ) if verbose else None
 
     p = perform_permutation_test(
         scores_baseline=list(scores_readers),
@@ -558,6 +637,8 @@ def perform_matched_permutation_test(
     )
 
     if verbose:
-        print(f"Probability for Performance(Panel of readers) ≥ Performance(AI): p = {p:.4e}")
+        print(
+            f"Probability for Performance(Panel of readers) ≥ Performance(AI): p = {p:.4e}"
+        )
 
     return float(p)

@@ -12,11 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from picai_eval.eval import evaluate, evaluate_folder
-from picai_eval.metrics import Metrics
+from picai_eval_p4.eval import evaluate, evaluate_folder
+from picai_eval_p4.metrics import Metrics
 
-print("If you have questions or suggestions, feel free to open an issue " +
-      "at https://github.com/DIAGNijmegen/picai_eval\n")
+print(
+    "If you have questions or suggestions, feel free to open an issue "
+    + "at https://github.com/DIAGNijmegen/picai_eval\n"
+)
 
 
 __all__ = [

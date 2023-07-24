@@ -18,8 +18,17 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import (Callable, Dict, Hashable, Iterable, List, Optional, Sized,
-                    Tuple, Union)
+from typing import (
+    Callable,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Optional,
+    Sized,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 from scipy import ndimage
@@ -31,11 +40,18 @@ try:
 except ImportError:  # pragma: no cover
     pass
 
-from picai_eval.analysis_utils import (calculate_dsc, calculate_iou,
-                                       label_structure, parse_detection_map)
-from picai_eval.image_utils import (read_label, read_prediction,
-                                    resize_image_with_crop_or_pad)
-from picai_eval.metrics import Metrics
+from picai_eval_p4.analysis_utils import (
+    calculate_dsc,
+    calculate_iou,
+    label_structure,
+    parse_detection_map,
+)
+from picai_eval_p4.image_utils import (
+    read_label,
+    read_prediction,
+    resize_image_with_crop_or_pad,
+)
+from picai_eval_p4.metrics import Metrics
 
 PathLike = Union[str, Path]
 
@@ -45,8 +61,8 @@ def evaluate_case(
     y_det: "Union[npt.NDArray[np.float32], str, Path]",
     y_true: "Union[npt.NDArray[np.int32], str, Path]",
     min_overlap: float = 0.10,
-    overlap_func: "Union[str, Callable[[npt.NDArray[np.float32], npt.NDArray[np.int32]], float]]" = 'IoU',
-    case_confidence_func: "Union[str, Callable[[npt.NDArray[np.float32]], float]]" = 'max',
+    overlap_func: "Union[str, Callable[[npt.NDArray[np.float32], npt.NDArray[np.int32]], float]]" = "IoU",
+    case_confidence_func: "Union[str, Callable[[npt.NDArray[np.float32]], float]]" = "max",
     allow_unmatched_candidates_with_minimal_overlap: bool = True,
     y_det_postprocess_func: "Optional[Callable[[npt.NDArray[np.float32]], npt.NDArray[np.float32]]]" = None,
     y_true_postprocess_func: "Optional[Callable[[npt.NDArray[np.int32]], npt.NDArray[np.int32]]]" = None,
@@ -92,16 +108,18 @@ def evaluate_case(
         y_true = read_label(y_true)
     if isinstance(y_det, (str, Path)):
         y_det = read_prediction(y_det)
-    if overlap_func == 'IoU':
+    if overlap_func == "IoU":
         overlap_func = calculate_iou
-    elif overlap_func == 'DSC':
+    elif overlap_func == "DSC":
         overlap_func = calculate_dsc
     elif isinstance(overlap_func, str):
-        raise ValueError(f"Overlap function with name {overlap_func} not recognized. Supported are 'IoU' and 'DSC'")
+        raise ValueError(
+            f"Overlap function with name {overlap_func} not recognized. Supported are 'IoU' and 'DSC'"
+        )
 
     # convert dtype to float32
-    y_true = y_true.astype('int32')
-    y_det = y_det.astype('float32')
+    y_true = y_true.astype("int32")
+    y_det = y_det.astype("float32")
 
     # if specified, apply postprocessing functions
     if y_det_postprocess_func is not None:
@@ -123,7 +141,7 @@ def evaluate_case(
     if not y_true.any():
         # benign case, all predictions are FPs
         for lesion_confidence in confidences.values():
-            y_list.append((0, lesion_confidence, 0.))
+            y_list.append((0, lesion_confidence, 0.0))
     else:
         # malignant case, collect overlap between each prediction and ground truth lesion
         labeled_gt, num_gt_lesions = ndimage.label(y_true, structure=label_structure)
@@ -132,12 +150,12 @@ def evaluate_case(
 
         for lesion_id in gt_lesion_ids:
             # for each lesion in ground-truth (GT) label
-            gt_lesion_mask = (labeled_gt == (1+lesion_id))
+            gt_lesion_mask = labeled_gt == (1 + lesion_id)
 
             # calculate overlap between each lesion candidate and the current GT lesion
             for lesion_candidate_id in lesion_candidate_ids:
                 # calculate overlap between lesion candidate and GT mask
-                lesion_pred_mask = (indexed_pred == (1+lesion_candidate_id))
+                lesion_pred_mask = indexed_pred == (1 + lesion_candidate_id)
                 overlap_score = overlap_func(lesion_pred_mask, gt_lesion_mask)
 
                 # store overlap
@@ -145,17 +163,28 @@ def evaluate_case(
 
         # match lesion candidates to ground truth lesion (for documentation on how this works, please see
         # https://docs.scipy.org/doc/scipy-0.18.1/reference/generated/scipy.optimize.linear_sum_assignment.html)
-        overlap_matrix[overlap_matrix < min_overlap] = 0  # don't match lesions with insufficient overlap
-        overlap_matrix[overlap_matrix > 0] += 1  # prioritize matching over the amount of overlap
-        matched_lesion_indices, matched_lesion_candidate_indices = linear_sum_assignment(overlap_matrix, maximize=True)
+        overlap_matrix[
+            overlap_matrix < min_overlap
+        ] = 0  # don't match lesions with insufficient overlap
+        overlap_matrix[
+            overlap_matrix > 0
+        ] += 1  # prioritize matching over the amount of overlap
+        (
+            matched_lesion_indices,
+            matched_lesion_candidate_indices,
+        ) = linear_sum_assignment(overlap_matrix, maximize=True)
 
         # remove indices where overlap is zero
-        mask = (overlap_matrix[matched_lesion_indices, matched_lesion_candidate_indices] > 0)
+        mask = (
+            overlap_matrix[matched_lesion_indices, matched_lesion_candidate_indices] > 0
+        )
         matched_lesion_indices = matched_lesion_indices[mask]
         matched_lesion_candidate_indices = matched_lesion_candidate_indices[mask]
 
         # all lesion candidates that are matched are TPs
-        for lesion_id, lesion_candidate_id in zip(matched_lesion_indices, matched_lesion_candidate_indices):
+        for lesion_id, lesion_candidate_id in zip(
+            matched_lesion_indices, matched_lesion_candidate_indices
+        ):
             lesion_confidence = confidences[lesion_candidate_id]
             overlap = overlap_matrix[lesion_id, lesion_candidate_id]
             overlap -= 1  # return overlap to [0, 1]
@@ -166,21 +195,57 @@ def evaluate_case(
 
         # all ground truth lesions that are not matched are FNs
         unmatched_gt_lesions = set(gt_lesion_ids) - set(matched_lesion_indices)
-        y_list += [(1, 0., 0.) for _ in unmatched_gt_lesions]
+
+        # before adding FNs, check if TP lesions match these as well and assign accordingly
+        for lesion_id in unmatched_gt_lesions:
+            overlaps = overlap_matrix[lesion_id]
+            # if anything has overlap, we have an extra match
+            if np.sum(overlaps) > 0:
+                lesion_candidate_id = np.argmax(overlaps)
+
+                lesion_confidence = confidences[lesion_candidate_id]
+                overlap = overlap_matrix[lesion_id, lesion_candidate_id]
+                overlap -= 1  # return overlap to [0, 1]
+
+                assert (
+                    overlap > min_overlap
+                ), "Overlap must be greater than min_overlap!"
+
+                y_list.append((1, lesion_confidence, overlap))
+
+                matched_lesion_indices = np.append(matched_lesion_indices, lesion_id)
+                matched_lesion_candidate_indices = np.append(
+                    matched_lesion_candidate_indices, lesion_candidate_id
+                )
+
+                print("extra match!")
+
+        # all ground truth lesions that are not matched are FNs
+        unmatched_gt_lesions = set(gt_lesion_ids) - set(matched_lesion_indices)
+        y_list += [(1, 0.0, 0.0) for _ in unmatched_gt_lesions]
 
         # all lesion candidates with insufficient overlap/not matched to a gt lesion are FPs
         if allow_unmatched_candidates_with_minimal_overlap:
-            candidates_sufficient_overlap = lesion_candidate_ids[(overlap_matrix > 0).any(axis=0)]
-            unmatched_candidates = set(lesion_candidate_ids) - set(candidates_sufficient_overlap)
+            candidates_sufficient_overlap = lesion_candidate_ids[
+                (overlap_matrix > 0).any(axis=0)
+            ]
+            unmatched_candidates = set(lesion_candidate_ids) - set(
+                candidates_sufficient_overlap
+            )
         else:
-            unmatched_candidates = set(lesion_candidate_ids) - set(matched_lesion_candidate_indices)
-        y_list += [(0, confidences[lesion_candidate_id], 0.) for lesion_candidate_id in unmatched_candidates]
+            unmatched_candidates = set(lesion_candidate_ids) - set(
+                matched_lesion_candidate_indices
+            )
+        y_list += [
+            (0, confidences[lesion_candidate_id], 0.0)
+            for lesion_candidate_id in unmatched_candidates
+        ]
 
     # determine case-level confidence score
-    if case_confidence_func == 'max':
+    if case_confidence_func == "max":
         # take highest lesion confidence as case-level confidence
         case_confidence = np.max(y_det)
-    elif case_confidence_func == 'bayesian':
+    elif case_confidence_func == "bayesian":
         # if c_i is the probability the i-th lesion is csPCa, then the case-level
         # probability to have one or multiple csPCa lesion is 1 - Π_i{ 1 - c_i}
         case_confidence = 1 - np.prod([(1 - c) for c in confidences.values()])
@@ -198,8 +263,8 @@ def evaluate(
     sample_weight: "Optional[Iterable[float]]" = None,
     subject_list: Optional[Iterable[Hashable]] = None,
     min_overlap: float = 0.10,
-    overlap_func: "Union[str, Callable[[npt.NDArray[np.float32], npt.NDArray[np.int32]], float]]" = 'IoU',
-    case_confidence_func: "Union[str, Callable[[npt.NDArray[np.float32]], float]]" = 'max',
+    overlap_func: "Union[str, Callable[[npt.NDArray[np.float32], npt.NDArray[np.int32]], float]]" = "IoU",
+    case_confidence_func: "Union[str, Callable[[npt.NDArray[np.float32]], float]]" = "max",
     allow_unmatched_candidates_with_minimal_overlap: bool = True,
     y_det_postprocess_func: "Optional[Callable[[npt.NDArray[np.float32]], npt.NDArray[np.float32]]]" = None,
     y_true_postprocess_func: "Optional[Callable[[npt.NDArray[np.int32]], npt.NDArray[np.int32]]]" = None,
@@ -275,9 +340,11 @@ def evaluate(
                     y_true=y_true_case,
                     weight=weight,
                     idx=idx,
-                    **evaluate_case_kwargs
+                    **evaluate_case_kwargs,
                 ): idx
-                for (y_det_case, y_true_case, weight, idx) in zip(y_det, y_true, sample_weight, subject_list)
+                for (y_det_case, y_true_case, weight, idx) in zip(
+                    y_det, y_true, sample_weight, subject_list
+                )
             }
 
             iterator = concurrent.futures.as_completed(futures)
@@ -289,7 +356,7 @@ def evaluate(
                     y_true=y_true_case,
                     weight=weight,
                     idx=idx,
-                    **evaluate_case_kwargs
+                    **evaluate_case_kwargs,
                 )
 
             iterator = map(func, y_det, y_true, sample_weight, subject_list)
@@ -298,7 +365,7 @@ def evaluate(
             total: Optional[int] = None
             if isinstance(subject_list, Sized):
                 total = len(subject_list)
-            iterator = tqdm(iterator, desc='Evaluating', total=total)
+            iterator = tqdm(iterator, desc="Evaluating", total=total)
 
         for result in iterator:
             if isinstance(result, tuple):
@@ -308,7 +375,7 @@ def evaluate(
                 # multi-threaded evaluation
                 lesion_results_case, case_confidence, weight, idx = result.result()
             else:
-                raise TypeError(f'Unexpected result type: {type(result)}')
+                raise TypeError(f"Unexpected result type: {type(result)}")
 
             # aggregate results
             case_weight[idx] = weight
@@ -343,7 +410,7 @@ def evaluate_folder(
     detection_map_postfixes: Optional[List[str]] = None,
     label_postfixes: Optional[List[str]] = None,
     verbose: int = 1,
-    **kwargs
+    **kwargs,
 ) -> Metrics:
     """
     Evaluate 3D detection performance, for all samples in y_det_dir,
@@ -419,15 +486,19 @@ def evaluate_folder(
                     break
 
             # check if detection map and label are found
-            assert found_pred, f"Did not find prediction for {subject_id} in {y_det_dir}!"
+            assert (
+                found_pred
+            ), f"Did not find prediction for {subject_id} in {y_det_dir}!"
             assert found_label, f"Did not find label for {subject_id} in {y_true_dir}!"
     else:
         # collect all detection maps found in detection_map_dir
         file_list = sorted(os.listdir(y_det_dir))
         subject_list = []
         if verbose >= 1:
-            print(f"Found {len(file_list)} files in the input directory, collecting detection_mapes with " +
-                  f"{detection_map_postfixes} and labels with {label_postfixes}.")
+            print(
+                f"Found {len(file_list)} files in the input directory, collecting detection_mapes with "
+                + f"{detection_map_postfixes} and labels with {label_postfixes}."
+            )
 
         # collect filenames of detection_map predictions
         for fn in file_list:
@@ -436,7 +507,9 @@ def evaluate_folder(
                     y_det += [os.path.join(y_det_dir, fn)]
                     subject_id = fn.replace(postfix, "")
                     if subject_id in subject_list:
-                        print(f"Found multiple detection maps for {subject_id}, skipping {fn}!")
+                        print(
+                            f"Found multiple detection maps for {subject_id}, skipping {fn}!"
+                        )
                         continue
 
                     subject_list += [subject_id]
@@ -456,16 +529,24 @@ def evaluate_folder(
 
     # ensure files exist
     for subject_id, detection_path in zip(subject_list, y_det):
-        assert os.path.exists(detection_path), f"Could not find prediction for {subject_id} at {detection_path}!"
+        assert os.path.exists(
+            detection_path
+        ), f"Could not find prediction for {subject_id} at {detection_path}!"
     for subject_id, label_path in zip(subject_list, y_true):
-        assert os.path.exists(label_path), f"Could not find label for {subject_id} at {label_path}!"
+        assert os.path.exists(
+            label_path
+        ), f"Could not find label for {subject_id} at {label_path}!"
 
     if verbose >= 1:
-        print(f"Found prediction and label for {len(y_det)} cases. Here are some examples:")
+        print(
+            f"Found prediction and label for {len(y_det)} cases. Here are some examples:"
+        )
         print(subject_list[0:5])
 
     # check if predictions were found
     assert len(y_det), f"Did not find any predictions in {y_det_dir}!"
 
     # perform evaluation with compiled file lists
-    return evaluate(y_det=y_det, y_true=y_true, subject_list=subject_list, verbose=verbose, **kwargs)
+    return evaluate(
+        y_det=y_det, y_true=y_true, subject_list=subject_list, verbose=verbose, **kwargs
+    )

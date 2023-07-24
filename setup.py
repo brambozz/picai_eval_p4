@@ -18,8 +18,8 @@ def gitcmd_update_submodules():
         Returns:
         True if the package is a git repository and the modules were updated. False otherwise.
     """
-    if os.path.exists(os.path.join(HERE, '.git')):
-        check_call(['git', 'submodule', 'update', '--init', '--recursive'])
+    if os.path.exists(os.path.join(HERE, ".git")):
+        check_call(["git", "submodule", "update", "--init", "--recursive"])
         return True
 
     return False
@@ -58,24 +58,24 @@ class gitcmd_sdist(sdist):
         sdist.run(self)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     with open("README.md", "r", encoding="utf-8") as fh:
         long_description = fh.read()
 
     setuptools.setup(
-        version='1.4.5',  # also update version in metrics.py -> version
-        author_email='Joeran.Bosma@radboudumc.nl',
+        version="1.4.5",  # also update version in metrics.py -> version
+        author_email="Joeran.Bosma@radboudumc.nl",
         long_description=long_description,
         long_description_content_type="text/markdown",
-        url='https://github.com/DIAGNijmegen/picai_eval',
+        url="https://github.com/DIAGNijmegen/picai_eval",
         project_urls={
             "Bug Tracker": "https://github.com/DIAGNijmegen/picai_eval/issues"
         },
-        license='Apache 2.0',
-        packages=['picai_eval', 'picai_eval.stat_util'],
+        license="Apache 2.0",
+        packages=["picai_eval_p4", "picai_eval_p4.stat_util"],
         cmdclass={
-            'develop': gitcmd_develop,
-            'install': gitcmd_install,
-            'sdist': gitcmd_sdist,
+            "develop": gitcmd_develop,
+            "install": gitcmd_install,
+            "sdist": gitcmd_sdist,
         },
     )
